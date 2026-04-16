@@ -2,18 +2,29 @@
 
 > Stop explaining your workflows every time you start a new Claude session.
 
-`skill-crystallizer` is a Claude Code plugin that automatically detects repeating tool patterns at session end and generates draft skills — ready to review and activate with `/review-drafts`.
+`skill-crystallizer` is a Claude Code plugin with two detection layers:
+
+- **Mid-session** (`skill_pattern_watcher.py`) — fires after every MCP tool call. When a repeating pattern crosses the threshold, nudges you immediately to run `/skill-creator`.
+- **End-of-session** (`skill_auto_drafter.py`) — fires when the session ends. Auto-generates a draft skill saved to `~/.claude/skills/draft/`, ready to review with `/review-drafts`.
 
 ## How It Works
 
-1. **Session ends** → Stop hook reads the JSONL transcript
-2. **Pattern detected** → 3-gate filter catches real workflows, not noise:
-   - A non-generic tool appears 3+ times (`MIN_REPEAT`)
-   - At least 5 meaningful tool calls in the session (`MIN_MEANINGFUL`)
-   - The top tool is ≥25% of all meaningful calls (`MIN_DENSITY`)
-3. **Draft generated** → saved to `~/.claude/skills/draft/<name>.md`
-4. **Next session** → SessionStart notifies you of pending drafts
-5. **You review** → run `/review-drafts` to activate, keep, or discard
+### Mid-session nudge (new)
+
+1. **MCP tool call completes** → PostToolUse hook fires `skill_pattern_watcher.py`
+2. **Pattern detected** → same 3-gate filter (see below)
+3. **Two signal types**:
+   - **SKILL GAP** — existing skill covers this domain but you're doing it manually → suggests improving the skill
+   - **NEW SKILL** — no matching skill exists → suggests creating one
+4. **Fires once per session** (deduped via `/tmp` flag) — no spam
+5. **You run** `/skill-creator` immediately, while the workflow is fresh
+
+### End-of-session draft
+
+1. **Session ends** → Stop hook reads the JSONL transcript via `skill_auto_drafter.py`
+2. **Pattern detected** → draft saved to `~/.claude/skills/draft/<name>.md`
+3. **Next session** → SessionStart notifies you of pending drafts
+4. **You review** → run `/review-drafts` to activate, keep, or discard
 
 ## Install
 
@@ -32,7 +43,23 @@ Add this to your `~/.claude/settings.json` under `extraKnownMarketplaces`:
 
 Then install via Claude Code: `/plugins install skill-crystallizer@skill-crystallizer`
 
-### Step 2 — Add the Stop hook
+### Step 2 — Add the PostToolUse hook (mid-session nudge)
+
+Add this to the `hooks.PostToolUse` array in `~/.claude/settings.json`:
+
+```json
+{
+  "matcher": "mcp__",
+  "hooks": [
+    {
+      "type": "command",
+      "command": "PLUGIN_DIR=$(python3 -c \"import pathlib; print(list(pathlib.Path.home().glob('.claude/plugins/cache/skill-crystallizer/skill-crystallizer/*/scripts'))[0])\"); python3 \"$PLUGIN_DIR/skill_pattern_watcher.py\" 2>/dev/null || true"
+    }
+  ]
+}
+```
+
+### Step 3 — Add the Stop hook (end-of-session draft)
 
 Add this to the `hooks.Stop` array in `~/.claude/settings.json`:
 
@@ -48,7 +75,7 @@ Add this to the `hooks.Stop` array in `~/.claude/settings.json`:
 }
 ```
 
-### Step 3 — Add the SessionStart hook (optional but recommended)
+### Step 4 — Add the SessionStart hook (optional but recommended)
 
 ```json
 {
@@ -70,7 +97,7 @@ Add this to the `hooks.Stop` array in `~/.claude/settings.json`:
 
 ## Pattern Detection Logic
 
-`skill_auto_drafter.py` reads the session JSONL transcript and applies 3 gates:
+Both scripts share the same 3-gate filter:
 
 | Gate | Constant | What it filters |
 |---|---|---|
@@ -82,7 +109,7 @@ Generic tools (`Bash`, `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Agent`) are exc
 
 ## Tuning
 
-Edit `scripts/skill_auto_drafter.py` constants to tune sensitivity:
+Edit constants in either script to tune sensitivity:
 
 ```python
 MIN_REPEAT     = 3     # lower → more drafts
