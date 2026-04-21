@@ -117,7 +117,7 @@ MIN_MEANINGFUL = 5     # lower → fires on shorter sessions
 MIN_DENSITY    = 0.25  # lower → less strict on focus
 ```
 
-## Requirements
+## Requirements:
 
 - Claude Code with hooks support
 - Python 3 (standard library only — no pip install needed)
