@@ -10,10 +10,14 @@ Fires AFTER vault_search.py save-session via the Stop hook chain.
 Reads Stop hook payload from stdin.
 
 Pattern logic:
-  - A meaningful (non-generic) tool must appear MIN_REPEAT+ times
-  - Total meaningful tool calls must be >= MIN_MEANINGFUL
-  - Top tool must be >= MIN_DENSITY (25%) of meaningful calls — filters noise in long exploratory sessions
+  - A meaningful (non-generic) tool must appear MIN_REPEAT (10)+ times
+  - Total meaningful tool calls must be >= MIN_MEANINGFUL (15)
+  - Top tool must be >= MIN_DENSITY (50%) of meaningful calls — filters noise in long exploratory sessions
+  - context-mode tools (ctx_execute etc.) count as generic — they carry routed Bash work
   - Raw total call count is NOT used — measures pattern strength, not session length
+
+Thresholds raised from 3 / 5 / 25%: those gates fired on routine sessions and
+produced drafts named after a tool, not a workflow.
 """
 
 import json
@@ -24,12 +28,14 @@ from datetime import datetime
 from pathlib import Path
 
 DRAFT_DIR       = Path.home() / ".claude/skills/draft"
-MIN_REPEAT      = 3     # meaningful tool must appear this many times
-MIN_MEANINGFUL  = 5     # at least this many meaningful tool calls total
-MIN_DENSITY     = 0.25  # top tool must be >= 25% of meaningful calls
+MIN_REPEAT      = 10    # meaningful tool must appear this many times
+MIN_MEANINGFUL  = 15    # at least this many meaningful tool calls total
+MIN_DENSITY     = 0.50  # top tool must be >= 50% of meaningful calls
 
 # Generic tools — too broad to name a skill after
 SKIP_TOOLS = {"Bash", "Read", "Write", "Edit", "Glob", "Grep", "Agent"}
+# context-mode tools stand in for Bash/Read — just as generic
+SKIP_PREFIXES = ("mcp__plugin_context-mode",)
 
 
 def extract_tools_and_messages(transcript_path: str):
@@ -82,7 +88,8 @@ def detect_pattern(tool_calls: list, user_messages: list):
     counts = Counter(tool_calls)
 
     # Separate meaningful from generic tool calls
-    meaningful = {t: c for t, c in counts.items() if t not in SKIP_TOOLS}
+    meaningful = {t: c for t, c in counts.items()
+                  if t not in SKIP_TOOLS and not t.startswith(SKIP_PREFIXES)}
     total_meaningful = sum(meaningful.values())
 
     # Gate 1: enough meaningful tool calls in the session

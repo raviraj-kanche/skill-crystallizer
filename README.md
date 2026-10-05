@@ -97,24 +97,24 @@ Add this to the `hooks.Stop` array in `~/.claude/settings.json`:
 
 ## Pattern Detection Logic
 
-Both scripts share the same 3-gate filter:
+Both scripts use the same 3-gate filter. The end-of-session drafter has stricter values, because it writes a file on every hit:
 
-| Gate | Constant | What it filters |
-|---|---|---|
-| 1 | `MIN_MEANINGFUL = 5` | Sessions too short to have a real pattern |
-| 2 | `MIN_REPEAT = 3` | One-off tool usage |
-| 3 | `MIN_DENSITY = 0.25` | Incidental repeats in long exploratory sessions |
+| Gate | Constant | Drafter | Watcher | What it filters |
+|---|---|---|---|---|
+| 1 | `MIN_MEANINGFUL` | 15 | 5 | Sessions too short to have a real pattern |
+| 2 | `MIN_REPEAT` | 10 | 3 | One-off tool usage |
+| 3 | `MIN_DENSITY` | 0.50 | 0.25 | Incidental repeats in long exploratory sessions |
 
-Generic tools (`Bash`, `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Agent`) are excluded — only domain-specific tools count.
+Generic tools (`Bash`, `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Agent`) are excluded — only domain-specific tools count. The drafter also excludes context-mode tools (`mcp__plugin_context-mode*`), which carry routed Bash work.
 
 ## Tuning
 
-Edit constants in either script to tune sensitivity:
+Edit constants in either script to tune sensitivity (drafter values shown):
 
 ```python
-MIN_REPEAT     = 3     # lower → more drafts
-MIN_MEANINGFUL = 5     # lower → fires on shorter sessions
-MIN_DENSITY    = 0.25  # lower → less strict on focus
+MIN_REPEAT     = 10    # lower → more drafts
+MIN_MEANINGFUL = 15    # lower → fires on shorter sessions
+MIN_DENSITY    = 0.50  # lower → less strict on focus
 ```
 
 ## Requirements:
